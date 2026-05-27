@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Fly: Fighter Jets Fixed</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #020210;
+            font-family: 'Segoe UI', sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #ui {
+            position: absolute;
+            top: 25px;
+            left: 20px;
+            color: #00f0ff;
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00f0ff;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+        }
+        #coin-ui { color: #ffd700; text-shadow: 0 0 10px #ffd700; }
+        #lives-ui { color: #ff0055; text-shadow: 0 0 10px #ff0055; font-size: 18px; }
+        
+        #menu-container {
+            display: none; /* Изначально скрыто */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 360px;
+            text-align: center;
+            z-index: 20;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        #menu-container::-webkit-scrollbar { width: 4px; }
+        #menu-container::-webkit-scrollbar-thumb { background: #00f0ff; border-radius: 10px; }
+
+        #restart-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00f0ff;
+            background: #07162c;
+            border: 3px solid #00f0ff;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 20px #00f0ff;
+            text-shadow: 0 0 10px #00f0ff;
+            margin-bottom: 15px;
+        }
+
+        .shop-box {
+            background: rgba(7, 22, 44, 0.95);
+            border: 2px solid #3d5a80;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .shop-title {
+            color: #fff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #3d5a80;
+            padding-bottom: 5px;
+        }
+        .skins-list, .upgrades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .skin-item, .upgrade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0d2547;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .skin-item.active {
+            border-color: #00f0ff;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+        }
+        .skin-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+        .skin-class {
+            font-size: 10px;
+            color: #88a0c0;
+            text-transform: uppercase;
+        }
+        .price-gold { color: #ffd700; font-weight: bold; }
+        .price-free { color: #00ffaa; font-weight: bold; }
+        .lvl-text { color: #00f0ff; font-size: 11px; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div>SCORE: <span id="score">0</span></div>
+        <div id="coin-ui">COINS: <span id="coins">0</span></div>
+        <div id="lives-ui">SHIELD: <span id="lives">0</span></div>
+    </div>
+
+    <div id="menu-container">
+        <button id="restart-btn" onclick="initGame()">В БОЙ!</button>
+        
+        <div class="shop-box">
+            <div class="shop-title">⚙️ МОДЕРНИЗАЦИЯ СИСТЕМ</div>
+            <div class="upgrades-list">
+                <div class="upgrade-item" onclick="buyUpgrade('magnet')">
+                    <div>🧲 Магнит ресурсов <span class="lvl-text" id="magnet-lvl">LVL 0</span></div>
+                    <span class="price-gold" id="magnet-price">15💰</span>
+                </div>
+                <div class="upgrade-item" onclick="buyUpgrade('lives')">
+                    <div>🛡️ Энергощиты корпуса <span class="lvl-text" id="lives-lvl">LVL 0</span></div>
+                    <span class="price-gold" id="lives-price">25💰</span>
+                </div>
+            </div>
+
+            <div class="shop-title">🛩️ ВОЕННЫЙ АНГАР ИСТРЕБИТЕЛЕЙ</div>
+            <div class="skins-list">
+                <div class="skin-item active" id="skin-default" onclick="buyOrSelectSkin('default', 0)">
+                    <div class="skin-info">
+                        <span>F-16 "Неон Страйкер"</span>
+                        <span class="skin-class">Легкий истребитель</span>
+                    </div>
+                    <span class="skin-price price-free">ВЫБРАН</span>
+                </div>
+                <div class="skin-item" id="skin-phantom" onclick="buyOrSelectSkin('phantom', 15)">
+                    <div class="skin-info">
+                        <span>🥷 Стелс "Фантом X"</span>
+                        <span class="skin-class">Штурмовик-невидимка</span>
+                    </div>
+                    <span class="skin-price" id="price-phantom"><span class="price-gold">15💰</span></span>
+                </div>
+                <div class="skin-item" id="skin-heavy" onclick="buyOrSelectSkin('heavy', 35)">
+                    <div class="skin-info">
+                        <span>🚀 Тяжёлый "Раптор Про"</span>
+                        <span class="skin-class">Перехватчик</span>
+                    </div>
+                    <span class="skin-price" id="price-heavy"><span class="price-gold">35💰</span></span>
+                </div>
+                <div class="skin-item" id="skin-vortex" onclick="buyOrSelectSkin('vortex', 60)">
+                    <div class="skin-info">
+                        <span>🌌 Корвет "Вортекс"</span>
+                        <span class="skin-class">Гиперзвуковой концепт</span>
+                    </div>
+                    <span class="skin-price" id="price-vortex"><span class="price-gold">60💰</span></span>
+                </div>
+                <div class="skin-item" id="skin-omega" onclick="buyOrSelectSkin('omega', 100)">
+                    <div class="skin-info">
+                        <span>👑 Флагман "Омега Дум"</span>
+                        <span class="skin-class">Космический Крейсер</span>
+                    </div>
+                    <span class="skin-price" id="price-omega"><span class="price-gold">100💰</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const coinsEl = document.getElementById('coins');
+        const livesEl = document.getElementById('lives');
+        const menuContainer = document.getElementById('menu-container');
+
+        const SKINS = {
+            default: { color: '#00f0ff', glow: '#00a8ff', model: 'f16' },
+            phantom: { color: '#00ff66', glow: '#00aa33', model: 'phantom' },
+            heavy:   { color: '#ffb700', glow: '#ff7700', model: 'raptor' },
+            vortex:  { color: '#b000ff', glow: '#7a00ff', model: 'vortex' },
+            omega:   { color: '#ff003c', glow: '#aa0011', model: 'omega' }
+        };
+
+        let coins = parseInt(localStorage.getItem('neon_fly_coins')) || 0;
+        let currentSkin = localStorage.getItem('neon_fly_current_skin') || 'default';
+        let purchasedSkins = JSON.parse(localStorage.getItem('neon_fly_purchased')) || ['default'];
+        let magnetLvl = parseInt(localStorage.getItem('neon_fly_up_magnet')) || 0;
+        let maxLivesLvl = parseInt(localStorage.getItem('neon_fly_up_lives')) || 0;
+
+        coinsEl.innerText = coins;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const SENSITIVITY = 13.0; 
+        const TOUCH_Y_OFFSET = 80; 
+
+        const player = { x: 0, y: 0, radius: 22, currentLives: 0, hitTimer: 0 };
+        const target = { x: 0, y: 0 };
+        
+        let score = 0;
+        let gameObjects = []; 
+        let stars = [];
+        let isGameOver = false;
+        let spawnTimer = 0;
+
+        for (let i = 0; i < 45; i++) {
+            stars.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 2 + 1
+            });
+        }
+
+        // БЕЗОПАСНОЕ ОБНОВЛЕНИЕ ИНТЕРФЕЙСА МАГАЗИНА
+        function updateShopUI() {
+            try {
+                document.querySelectorAll('.skin-item').forEach(el => el.classList.remove('active'));
+                
+                const models = ['phantom', 'heavy', 'vortex', 'omega'];
+                models.forEach(m => {
+                    const el = document.getElementById(`price-${m}`);
+                    if (el && purchasedSkins.includes(m)) {
+                        el.innerText = (currentSkin === m) ? 'ВЫБРАН' : 'ВЫБРАТЬ';
+                        el.className = 'skin-price price-free';
+                    }
+                });
+
+                const currentSkinEl = document.getElementById(`skin-${currentSkin}`);
+                if (currentSkinEl) currentSkinEl.classList.add('active');
+                
+                const defPriceEl = document.getElementById('skin-default');
+                if (defPriceEl) defPriceEl.querySelector('.skin-price').innerText = (currentSkin === 'default') ? 'ВЫБРАН' : 'ВЫБРАТЬ';
+
+                document.getElementById('magnet-lvl').innerText = `LVL ${magnetLvl}`;
+                if (magnetLvl >= 3) document.getElementById('magnet-price').innerText = 'MAX';
+                else document.getElementById('magnet-price').innerText = `${(magnetLvl + 1) * 15}💰`;
+
+                document.getElementById('lives-lvl').innerText = `LVL ${maxLivesLvl}`;
+                if (maxLivesLvl >= 3) document.getElementById('lives-price').innerText = 'MAX';
+                else document.getElementById('lives-price').innerText = `${(maxLivesLvl + 1) * 25}💰`;
+            } catch (e) {
+                console.log("Ожидание загрузки DOM элементов...");
+            }
+        }
+
+        function buyUpgrade(type) {
+            if (type === 'magnet' && magnetLvl < 3) {
+                let cost = (magnetLvl + 1) * 15;
+                if (coins >= cost) { coins -= cost; magnetLvl++; localStorage.setItem('neon_fly_coins', coins); localStorage.setItem('neon_fly_up_magnet', magnetLvl); }
+            } else if (type === 'lives' && maxLivesLvl < 3) {
+                let cost = (maxLivesLvl + 1) * 25;
+                if (coins >= cost) { coins -= cost; maxLivesLvl++; localStorage.setItem('neon_fly_coins', coins); localStorage.setItem('neon_fly_up_lives', maxLivesLvl); }
+            }
+            coinsEl.innerText = coins;
+            updateShopUI();
+        }
+
+        function buyOrSelectSkin(skinName, price) {
+            if (purchasedSkins.includes(skinName)) {
+                currentSkin = skinName;
+                localStorage.setItem('neon_fly_current_skin', currentSkin);
+            } else if (coins >= price) {
+                coins -= price; purchasedSkins.push(skinName); currentSkin = skinName;
+                localStorage.setItem('neon_fly_coins', coins);
+                localStorage.setItem('neon_fly_purchased', JSON.stringify(purchasedSkins));
+                localStorage.setItem('neon_fly_current_skin', currentSkin);
+            }
+            coinsEl.innerText = coins;
+            updateShopUI();
+        }
+
+        function updateTarget(clientX, clientY, isTouch) {
+            if (isGameOver) return;
+            target.x = clientX;
+            target.y = isTouch ? (clientY - TOUCH_Y_OFFSET) : clientY;
+        }
+
+        window.addEventListener('mousemove', (e) => updateTarget(e.clientX, e.clientY, false));
+        window.addEventListener('touchmove', (e) => { if (e.touches.length > 0) updateTarget(e.touches[0].clientX, e.touches[0].clientY, true); }, { passive: false });
+        window.addEventListener('touchstart', (e) => { if (e.touches.length > 0) updateTarget(e.touches[0].clientX, e.touches[0].clientY, true); }, { passive: false });
+
+        function initGame() {
+            isGameOver = false;
+            menuContainer.style.display = 'none'; // Гарантированно убираем меню
+            score = 0;
+            scoreEl.innerText = score;
+            gameObjects = [];
+            
+            player.x = canvas.width / 2;
+            player.y = canvas.height * 0.75;
+            player.currentLives = maxLivesLvl;
+            player.hitTimer = 0;
+            livesEl.innerText = player.currentLives;
+
+            target.x = player.x; target.y = player.y;
+            spawnTimer = 0;
+        }
+
+        function checkAndSpawn() {
+            spawnTimer++;
+            if (spawnTimer >= 38) {
+                spawnTimer = 0;
+                const rand = Math.random();
+                const size = 30;
+                const xPos = Math.random() * (canvas.width - size * 2) + size;
+                const speed = Math.random() * 3 + 4.5;
+
+                if (rand < 0.44) {
+                    gameObjects.push({ type: 'obstacle', x: xPos, y: -size, size: size, speed: speed, color: '#ff0055', glow: '#ff0055', passed: false });
+                } else if (rand < 0.82) {
+                    gameObjects.push({ type: 'coin', x: xPos, y: -size, size: 12, speed: speed + 0.5, color: '#ffd700', glow: '#ffaa00' });
+                } else {
+                    gameObjects.push({ type: 'fake', x: xPos, y: -size, size: 14, speed: speed, color: '#b000ff', glow: '#7a00ff' });
+                }
+            }
+        }
+
+        function drawFighterJet(x, y, r, skin, isDead) {
+            ctx.shadowBlur = 22; 
+            ctx.shadowColor = isDead ? '#ff0055' : skin.glow;
+            ctx.strokeStyle = isDead ? '#ff0055' : skin.color; 
+            ctx.fillStyle = '#051122'; 
+            ctx.lineWidth = 2.5;
+
+            ctx.beginPath();
+            
+            if (skin.model === 'phantom') {
+                ctx.moveTo(x, y - r * 1.2); 
+                ctx.lineTo(x - r * 0.3, y - r * 0.4);
+                ctx.lineTo(x - r * 1.2, y + r * 0.5); 
+                ctx.lineTo(x - r * 0.4, y + r * 0.3);
+                ctx.lineTo(x - r * 0.2, y + r * 1.0); 
+                ctx.lineTo(x, y + r * 0.6);
+                ctx.lineTo(x + r * 0.2, y + r * 1.0); 
+                ctx.lineTo(x + r * 0.4, y + r * 0.3);
+                ctx.lineTo(x + r * 1.2, y + r * 0.5); 
+                ctx.lineTo(x + r * 0.3, y - r * 0.4);
+            } 
+            else if (skin.model === 'raptor') {
+                ctx.moveTo(x - r*0.1, y - r * 1.1);
+                ctx.lineTo(x - r*0.1, y - r * 0.6);
+                ctx.lineTo(x - r*1.3, y + r * 0.2); 
+                ctx.lineTo(x - r*0.5, y + r * 0.4);
+                ctx.lineTo(x - r*0.6, y + r * 1.1); 
+                ctx.lineTo(x, y + r * 0.5);
+                ctx.lineTo(x + r*0.6, y + r * 1.1); 
+                ctx.lineTo(x + r*0.5, y + r * 0.4);
+                ctx.lineTo(x + r*1.3, y + r * 0.2); 
+                ctx.lineTo(x + r*0.1, y - r * 0.6);
+                ctx.lineTo(x + r*0.1, y - r * 1.1);
+            }
+            else if (skin.model === 'vortex') {
+                ctx.moveTo(x, y - r * 1.4);
+                ctx.lineTo(x - r * 1.1, y + r * 0.6);
+                ctx.lineTo(x - r * 0.4, y + r * 0.4);
+                ctx.lineTo(x - r * 0.5, y + r * 1.2);
+                ctx.lineTo(x, y + r * 0.2);
+                ctx.lineTo(x + r * 0.5, y + r * 1.2);
+                ctx.lineTo(x + r * 0.4, y + r * 0.4);
+                ctx.lineTo(x + r * 1.1, y + r * 0.6);
+            }
+            else if (skin.model === 'omega') {
+                ctx.moveTo(x, y - r * 1.5);
+                ctx.lineTo(x - r * 0.5, y - r * 0.5);
+                ctx.lineTo(x - r * 1.4, y - r * 0.2); 
+                ctx.lineTo(x - r * 1.2, y + r * 0.6);
+                ctx.lineTo(x - r * 0.5, y + r * 0.5);
+                ctx.lineTo(x - r * 0.6, y + r * 1.3);
+                ctx.lineTo(x, y + r * 0.8);
+                ctx.lineTo(x + r * 0.6, y + r * 1.3);
+                ctx.lineTo(x + r * 0.5, y + r * 0.5);
+                ctx.lineTo(x + r * 1.2, y + r * 0.6);
+                ctx.lineTo(x + r * 1.4, y - r * 0.2); 
+                ctx.lineTo(x + r * 0.5, y - r * 0.5);
+            }
+            else {
+                ctx.moveTo(x, y - r * 1.2); 
+                ctx.lineTo(x - r * 0.2, y - r * 0.4);
+                ctx.lineTo(x - r * 1.1, y + r * 0.4); 
+                ctx.lineTo(x - r * 0.3, y + r * 0.4);
+                ctx.lineTo(x - r * 0.4, y + r * 1.0); 
+                ctx.lineTo(x, y + r * 0.6);
+                ctx.lineTo(x + r * 0.4, y + r * 1.0); 
+                ctx.lineTo(x + r * 0.3, y + r * 0.4);
+                ctx.lineTo(x + r * 1.1, y + r * 0.4); 
+                ctx.lineTo(x + r * 0.2, y - r * 0.4);
+            }
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath(); ctx.arc(x, y - r * 0.1, r * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+            if (!isDead) {
+                ctx.fillStyle = skin.color;
+                if (skin.model === 'raptor' || skin.model === 'omega') {
+                    ctx.fillRect(x - r*0.4, y + r*0.7, 5, Math.random() * 14 + 6);
+                    ctx.fillRect(x + r*0.2, y + r*0.7, 5, Math.random() * 14 + 6);
+                } else {
+                    ctx.fillRect(x - 3, y + r * 0.6, 6, Math.random() * 16 + 8);
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (player.hitTimer > 0) { ctx.fillStyle = 'rgba(255, 0, 85, 0.2)'; player.hitTimer--; } 
+            else { ctx.fillStyle = '#020210'; }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            stars.forEach(star => {
+                ctx.fillRect(star.x, star.y, star.size, star.size); star.y += star.speed;
+                if (star.y > canvas.height) { star.y = 0; star.x = Math.random() * canvas.width; }
+            });
+
+            if (!isGameOver) {
+                checkAndSpawn();
+                player.x += (target.x - player.x) * (SENSITIVITY / 100);
+                player.y += (target.y - player.y) * (SENSITIVITY / 100);
+
+                if (player.x < player.radius) player.x = player.radius;
+                if (player.x > canvas.width - player.radius) player.x = canvas.width - player.radius;
+                if (player.y < player.radius) player.y = player.radius;
+                if (player.y > canvas.height - player.radius) player.y = canvas.height - player.radius;
+            }
+
+            let skin = SKINS[currentSkin] || SKINS.default;
+
+            if (!isGameOver && player.currentLives > 0) {
+                ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff';
+                ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius + 14, 0, Math.PI*2); ctx.stroke();
+            }
+
+            drawFighterJet(player.x, player.y, player.radius, skin, isGameOver);
+
+            for (let i = gameObjects.length - 1; i >= 0; i--) {
+                let obj = gameObjects[i];
+                if (!isGameOver) obj.y += obj.speed;
+
+                if (!isGameOver && obj.type === 'coin' && magnetLvl > 0) {
+                    let magnetRadius = magnetLvl === 1 ? 80 : magnetLvl === 2 ? 140 : 230;
+                    let dx = player.x - obj.x; let dy = player.y - obj.y; let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < magnetRadius) { obj.x += (dx / dist) * 5.5; obj.y += (dy / dist) * 5.5; }
+                }
+
+                ctx.shadowBlur = 15; ctx.shadowColor = obj.glow; ctx.strokeStyle = obj.color; ctx.lineWidth = 3;
+
+                if (obj.type === 'obstacle') {
+                    ctx.fillStyle = '#1f0210'; ctx.fillRect(obj.x - obj.size/2, obj.y - obj.size/2, obj.size, obj.size);
+                    ctx.strokeRect(obj.x - obj.size/2, obj.y - obj.size/2, obj.size, obj.size);
+                } 
+                else if (obj.type === 'coin') {
+                    ctx.fillStyle = '#2c2500'; ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.size, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                } 
+                else if (obj.type === 'fake') {
+                    ctx.fillStyle = '#140024'; ctx.beginPath();
+                    ctx.moveTo(obj.x, obj.y - obj.size); ctx.lineTo(obj.x - obj.size, obj.y + obj.size); ctx.lineTo(obj.x + obj.size, obj.y + obj.size);
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
+                }
+
+                if (!isGameOver) {
+                    let distX = player.x - obj.x; let distY = player.y - obj.y;
+                    let distance = Math.sqrt(distX * distX + distY * distY);
+                    let hitDistance = player.radius + (obj.type === 'coin' ? obj.size : obj.size / 1.2);
+
+                    if (distance < hitDistance) {
+                        if (obj.type === 'coin') {
+                            coins++; localStorage.setItem('neon_fly_coins', coins); coinsEl.innerText = coins;
+                            gameObjects.splice(i, 1); continue;
+                        } 
+                        else if (obj.type === 'obstacle' || obj.type === 'fake') {
+                            if (player.currentLives > 0) {
+                                player.currentLives--; livesEl.innerText = player.currentLives;
+                                player.hitTimer = 10; gameObjects.splice(i, 1); continue;
+                            } else {
+                                // ФИКС ТУТ: Сначала останавливаем игру, обновляем UI и только потом выводим на экран!
+                                isGameOver = true; 
+                                updateShopUI(); 
+                                menuContainer.style.display = 'block'; 
+                            }
+                        }
+                    }
+
+                    if (obj.type === 'obstacle' && !obj.passed && obj.y > (player.y + player.radius)) {
+                        obj.passed = true; score++; scoreEl.innerText = score;
+                    }
+                }
+
+                if (obj.y > canvas.height + 50) gameObjects.splice(i, 1);
+            }
+
+            ctx.shadowBlur = 0;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Подгружаем магазин сразу на старте страницы
+        updateShopUI();
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
+
+
