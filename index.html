@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Fly: Fighter Jets Fixed</title>
+    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Neon Fly">
+    <meta name="theme-color" content="#020210">
+
     <style>
         * {
             box-sizing: border-box;
@@ -240,6 +247,78 @@
         let isGameOver = false;
         let spawnTimer = 0;
 
+        // ЗВУКОВОЙ ДВИЖОК ИГРЫ (Синтезатор музыки и эффектов)
+        let audioCtx = null;
+        let bgMusicNode = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                startBackgroundMusic();
+            } else if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Синтез звука сбора монет (дзинь!)
+        function playCoinSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Ля 5-й октавы
+            osc.frequency.setValueAtTime(1320, audioCtx.currentTime + 0.08); // Перелив вверх
+            gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        // Синтез звука взрыва / удара (бум!)
+        function playExplosionSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.3); // Падение частоты вниз
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.35);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+        }
+
+        // Бесконечный процедурный кибер-бит на фоне
+        function startBackgroundMusic() {
+            const bufferSize = audioCtx.sampleRate * 2; // 2 секунды петли
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Генерируем простой синтвейв-ритм
+            for (let i = 0; i < bufferSize; i++) {
+                let t = i / audioCtx.sampleRate;
+                // Басовая линия и волновые щелчки (эмуляция драм-машины)
+                let bass = Math.sin(2 * Math.PI * 55 * t * (1 + (t % 0.25))) * 0.15;
+                let snare = (Math.random() * 2 - 1) * Math.exp(-10 * (t % 0.5)) * 0.04;
+                data[i] = bass + snare;
+            }
+
+            bgMusicNode = audioCtx.createBufferSource();
+            bgMusicNode.buffer = buffer;
+            bgMusicNode.loop = true;
+            
+            const musicGain = audioCtx.createGain();
+            musicGain.gain.value = 0.35; // Комфортная громкость музыки
+            
+            bgMusicNode.connect(musicGain);
+            musicGain.connect(audioCtx.destination);
+            bgMusicNode.start();
+        }
+
         for (let i = 0; i < 45; i++) {
             stars.push({
                 x: Math.random() * window.innerWidth,
@@ -249,7 +328,6 @@
             });
         }
 
-        // БЕЗОПАСНОЕ ОБНОВЛЕНИЕ ИНТЕРФЕЙСА МАГАЗИНА
         function updateShopUI() {
             try {
                 document.querySelectorAll('.skin-item').forEach(el => el.classList.remove('active'));
@@ -318,8 +396,9 @@
         window.addEventListener('touchstart', (e) => { if (e.touches.length > 0) updateTarget(e.touches[0].clientX, e.touches[0].clientY, true); }, { passive: false });
 
         function initGame() {
+            initAudio(); // Включаем звук и музыку при нажатии на кнопку старта!
             isGameOver = false;
-            menuContainer.style.display = 'none'; // Гарантированно убираем меню
+            menuContainer.style.display = 'none'; 
             score = 0;
             scoreEl.innerText = score;
             gameObjects = [];
@@ -503,15 +582,16 @@
 
                     if (distance < hitDistance) {
                         if (obj.type === 'coin') {
+                            playCoinSound(); // Звук монетки!
                             coins++; localStorage.setItem('neon_fly_coins', coins); coinsEl.innerText = coins;
                             gameObjects.splice(i, 1); continue;
                         } 
                         else if (obj.type === 'obstacle' || obj.type === 'fake') {
+                            playExplosionSound(); // Звук взрыва!
                             if (player.currentLives > 0) {
                                 player.currentLives--; livesEl.innerText = player.currentLives;
                                 player.hitTimer = 10; gameObjects.splice(i, 1); continue;
                             } else {
-                                // ФИКС ТУТ: Сначала останавливаем игру, обновляем UI и только потом выводим на экран!
                                 isGameOver = true; 
                                 updateShopUI(); 
                                 menuContainer.style.display = 'block'; 
@@ -531,12 +611,9 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Подгружаем магазин сразу на старте страницы
         updateShopUI();
         initGame();
         gameLoop();
     </script>
 </body>
 </html>
-
-
